@@ -12,42 +12,51 @@ gCLIENTID = config.twitch_client_id
 gCLIENT_SECRET = config.twitch_client_secret
 gSOUND_ALERT = config.alert_sound
 gFAVORITE_STREAMERS = config.favorite_streamers
+gSTATUS_CHECK_FREQUENCY = config.status_check_frequency
 already_live = []
 
+
 def initial_setup():
+	console_log("Setting up...")
 	arr_streamers = []
+
+	new_auth_token = get_twitch_auth_token()
 	
 	if gFAVORITE_STREAMERS:
-		arr_streamers =  gFAVORITE_STREAMERS
+		arr_streamers = gFAVORITE_STREAMERS
 		print("Favorite Streamers set to:")
 		print(gFAVORITE_STREAMERS)
-		
-	def show_text():
-		if txt_add_streamer_value.get() != "":
 
+	run_app(arr_streamers, new_auth_token)
+
+def run_app(arr_streamers, auth_token):	
+	console_log("Running...")
+
+	def add_streamer_to_ui():
+		if txt_add_streamer_value.get() != "":
 			arr_streamers.append(txt_add_streamer_value.get())
 		txt_add_streamer_value.set("")
-		lbl_streamer_names_value.set(arr_streamers)
+		lbl_streamer_names_value.set(("\n").join(arr_streamers))
 
-	def runCheckr():
+	def check_api_for_streamer_status():
 		for streamer in arr_streamers:
-			url = 'https://id.twitch.tv/oauth2/token'
-			myobj = {'client_id': gCLIENTID, 'client_secret': gCLIENT_SECRET, 'grant_type': 'client_credentials'}
-			x = requests.post(url, data=myobj)
-			myobj = (x.json())
-			auth_token = "Bearer " + (myobj['access_token'])
-			is_live_check = (is_streamer_live(streamer, auth_token))
-			if is_live_check:
-				if streamer not in already_live:
-					print(streamer + " went live at " + datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-					alert_popup(gAPP_TITLE, "{} is live!".format(streamer),
-								"https://twitch.tv/{}".format(streamer),streamer)
-					already_live.append(streamer)
-			if not is_live_check:
-				if streamer in already_live:
-					already_live.remove(streamer)
-		win_main.after(5000, runCheckr)
+			is_live = (is_streamer_live(streamer, auth_token))
 
+			if is_live:
+				if streamer not in already_live:
+					console_log(streamer + " is live!")
+					show_alert_popup(streamer)
+					already_live.append(streamer)
+
+			if not is_live:
+				if streamer in already_live:
+					console_log(streamer + " went offline")
+					already_live.remove(streamer)
+
+		console_log("Next check in " + str(gSTATUS_CHECK_FREQUENCY / 1000) + " seconds")
+		win_main.after(gSTATUS_CHECK_FREQUENCY, check_api_for_streamer_status)
+
+	# Create main window
 	win_main = Tk()
 	win_main.title(gAPP_TITLE)
 	w = 400 # width
@@ -56,22 +65,35 @@ def initial_setup():
 	y = (win_main.winfo_screenheight() - h)/2
 	win_main.geometry('%dx%d+%d+%d' % (w, h, x, y))
 	txt_add_streamer_value = StringVar()
-	txt_add_streamer = Entry(win_main, width=10, textvariable=txt_add_streamer_value)
+	txt_add_streamer = Entry(win_main, width=60, textvariable=txt_add_streamer_value)
 	txt_add_streamer.config(state=NORMAL)
 	txt_add_streamer.pack()
 
-	btn_add = Button(win_main, text="Add", command=show_text)
+	# Create add button
+	btn_add = Button(win_main, text="Add", command=add_streamer_to_ui, foreground="white", background="green", height=2, width=24)
 	btn_add.pack()
+
+	# Create label to show streamer list
+	lbl_streamer_list = Label(win_main, text="Watch list:", font="None 12 underline")
+	lbl_streamer_list.pack()
 
 	lbl_streamer_names_value = StringVar()
 	lbl_streamer_names = Label(win_main, textvariable=lbl_streamer_names_value)
 	lbl_streamer_names.pack()
-	lbl_streamer_names_value.set(arr_streamers)
+	lbl_streamer_names_value.set(("\n").join(arr_streamers))
 	
-	win_main.after(5000,runCheckr())
+	# Display window
+	#win_main.after(gSTATUS_CHECK_FREQUENCY,check_api_for_streamer_status())
+	win_main.bind('<Visibility', check_api_for_streamer_status())
 	win_main.mainloop()
 
-def alert_popup(popup_title, popup_msg, streamer_url, streamer):
+def show_alert_popup(streamer):
+	popup_title = gAPP_TITLE + " " + "{} IS LIVE!".format(streamer)
+	popup_msg = "{} is live!".format(streamer)
+	streamer_url = "https://twitch.tv/{}".format(streamer)
+
+
+	# Play optiona sound
 	if gSOUND_ALERT:
 		playsound(gSOUND_ALERT)
 	
@@ -113,12 +135,30 @@ def is_streamer_live(streamer_name, my_token):
 	)
 
 	try:
+		console_log("Checking if [" + streamer_name + "] is live...")
 		response = requests.get('https://api.twitch.tv/helix/streams', headers=headers, params=params)
 		json_data = json.loads(response.map(response)[0])
 		json_data = json_data['data'][0]
 		return True
 
 	except:
+		console_log("[" + streamer_name + "] is not live yet")
 		return False
+
+def get_twitch_auth_token():
+	console_log("Getting twitch token...")
+	url = 'https://id.twitch.tv/oauth2/token'
+	data_obj = {'client_id': gCLIENTID, 'client_secret': gCLIENT_SECRET, 'grant_type': 'client_credentials'}
+	x = requests.post(url, data=data_obj)
+	data_obj = (x.json())
+	console_log("Done getting twitch token")
+	return "Bearer " + (data_obj['access_token'])
+
+
+def get_timestamp():
+	return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+def console_log(msg):
+	print(get_timestamp() + ": " + msg)
 
 streams = initial_setup()
