@@ -137,12 +137,12 @@ def is_streamer_live(streamer_name, my_token):
 	try:
 		console_log("Checking if [" + streamer_name + "] is live...")
 		response = requests.get('https://api.twitch.tv/helix/streams', headers=headers, params=params)
-		json_data = json.loads(response.map(response)[0])
+		json_data = json.loads(response.text)
 		json_data = json_data['data'][0]
 		return True
 
 	except:
-		console_log("[" + streamer_name + "] is not live yet")
+		console_log("Not live or error occured")
 		return False
 
 def get_twitch_auth_token():
