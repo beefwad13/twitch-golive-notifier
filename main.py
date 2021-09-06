@@ -5,6 +5,10 @@ import json
 import webbrowser
 from datetime import datetime
 import config
+import threading
+
+
+
 
 # GLOBAL VARS
 gAPP_TITLE = "TwitchCheckr v6.9.420.0001"
@@ -14,7 +18,6 @@ gSOUND_ALERT = config.alert_sound
 gFAVORITE_STREAMERS = config.favorite_streamers
 gSTATUS_CHECK_FREQUENCY = config.status_check_frequency
 already_live = []
-
 
 def initial_setup():
 	console_log("Setting up...")
@@ -27,34 +30,38 @@ def initial_setup():
 		print("Favorite Streamers set to:")
 		print(gFAVORITE_STREAMERS)
 
-	run_app(arr_streamers, new_auth_token)
+	console_log("Start threads...")
+	threading.Timer(gSTATUS_CHECK_FREQUENCY / 1000, check_for_status_update, args=(arr_streamers, new_auth_token)).start()
+	create_main_window(arr_streamers)
 
-def run_app(arr_streamers, auth_token):	
-	console_log("Running...")
+def check_for_status_update(arr_streamers, auth_token):	
+	console_log("Checking for status updates...")
+
+	#def check_api_for_streamer_status():
+	for streamer in arr_streamers:
+		is_live = (is_streamer_live(streamer, auth_token))
+
+		if is_live:
+			if streamer not in already_live:
+				console_log(streamer + " is live!")
+				show_alert_popup(streamer)
+				already_live.append(streamer)
+
+		if not is_live:
+			if streamer in already_live:
+				console_log(streamer + " went offline")
+				already_live.remove(streamer)
+
+	console_log("Next check in " + str(gSTATUS_CHECK_FREQUENCY / 1000) + " seconds")
+	#win_main.after(gSTATUS_CHECK_FREQUENCY, check_api_for_streamer_status)
+
+def create_main_window(arr_streamers):
 
 	def add_streamer_to_ui():
 		if txt_add_streamer_value.get() != "":
 			arr_streamers.append(txt_add_streamer_value.get())
 		txt_add_streamer_value.set("")
 		lbl_streamer_names_value.set(("\n").join(arr_streamers))
-
-	def check_api_for_streamer_status():
-		for streamer in arr_streamers:
-			is_live = (is_streamer_live(streamer, auth_token))
-
-			if is_live:
-				if streamer not in already_live:
-					console_log(streamer + " is live!")
-					show_alert_popup(streamer)
-					already_live.append(streamer)
-
-			if not is_live:
-				if streamer in already_live:
-					console_log(streamer + " went offline")
-					already_live.remove(streamer)
-
-		console_log("Next check in " + str(gSTATUS_CHECK_FREQUENCY / 1000) + " seconds")
-		win_main.after(gSTATUS_CHECK_FREQUENCY, check_api_for_streamer_status)
 
 	# Create main window
 	win_main = Tk()
@@ -83,8 +90,7 @@ def run_app(arr_streamers, auth_token):
 	lbl_streamer_names_value.set(("\n").join(arr_streamers))
 	
 	# Display window
-	#win_main.after(gSTATUS_CHECK_FREQUENCY,check_api_for_streamer_status())
-	win_main.bind('<Visibility', check_api_for_streamer_status())
+	#win_main.bind('<Visibility', threading.Timer(5.0, check_for_status_update(arr_streamers, auth_token)).start())
 	win_main.mainloop()
 
 def show_alert_popup(streamer):
@@ -121,7 +127,7 @@ def show_alert_popup(streamer):
 	btn_open_stream.bind("<Button-1>", lambda e: open_stream("https://twitch.tv/{}".format(streamer)))
 	btn_close.pack()
 	
-	mainloop()
+	win_popup.mainloop()
 
 def is_streamer_live(streamer_name, my_token):
 
@@ -154,11 +160,13 @@ def get_twitch_auth_token():
 	console_log("Done getting twitch token")
 	return "Bearer " + (data_obj['access_token'])
 
-
 def get_timestamp():
 	return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
 def console_log(msg):
 	print(get_timestamp() + ": " + msg)
+
+
+
 
 streams = initial_setup()
