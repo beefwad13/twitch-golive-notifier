@@ -53,7 +53,7 @@ def check_for_status_update(arr_streamers, auth_token):
 				already_live.remove(streamer)
 
 	console_log("Next check in " + str(gSTATUS_CHECK_FREQUENCY / 1000) + " seconds")
-	#win_main.after(gSTATUS_CHECK_FREQUENCY, check_api_for_streamer_status)
+	threading.Timer(gSTATUS_CHECK_FREQUENCY / 1000, check_for_status_update, args=(arr_streamers, auth_token)).start()
 
 def create_main_window(arr_streamers):
 
